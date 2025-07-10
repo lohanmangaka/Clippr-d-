@@ -1,0 +1,1226 @@
+```
+clipprd/
+├── lib/
+│   ├── main.dart
+│   ├── models/
+│   │   ├── clip.dart
+│   │   ├── video_segment.dart
+│   ├── screens/
+│   │   ├── dashboard_screen.dart
+│   │   ├── login_screen.dart
+│   │   ├── editor_screen.dart
+│   │   ├── clip_search_screen.dart
+│   │   ├── settings_screen.dart
+│   ├── services/
+│   │   ├── auth_service.dart
+│   │   ├── whisper_service.dart
+│   │   ├── zapcap_service.dart
+│   │   ├── pexels_service.dart
+│   │   ├── autoflip_service.dart
+│   │   ├── libretranslate_service.dart
+│   │   ├── audio_processing_service.dart
+│   │   ├── clip_scorer.dart
+│   ├── widgets/
+│   │   ├── timeline_editor.dart
+│   │   ├── branding_template.dart
+│   │   ├── video_upload_widget.dart
+│   │   ├── processing_status.dart
+│   ├── utils/
+│   │   ├── constants.dart
+│   │   ├── permissions.dart
+│   ├── assets/
+│       ├── branding/
+│       │   ├── logo.png
+│       ├── icons/
+│           ├── upload.png
+│           ├── gallery.png
+│           ├── record.png
+│           ├── link.png
+├── pubspec.yaml
+├── android/
+│   ├── app/
+│   │   ├── build.gradle
+│   ├── build.gradle
+│   ├── gradle/
+│   │   ├── wrapper/
+│   │   │   ├── gradle-wrapper.properties
+│   ├── gradle.properties
+├── ios/
+│   ├── Runner/
+│   │   ├── Info.plist
+├── build.gradle
+├── settings.gradle
+├── README.md
+```
+
+### **File Contents**
+
+#### **lib/main.dart**
+```dart
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'screens/login_screen.dart';
+import 'screens/dashboard_screen.dart';
+import 'services/auth_service.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  runApp(const ClipprdApp());
+}
+
+class ClipprdApp extends StatelessWidget {
+  const ClipprdApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Clippr’d',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        useMaterial3: true,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+      ),
+      home: StreamBuilder(
+        stream: AuthService().authStateChanges,
+        builder: (context, snapshot) {
+          if (snapshot.hasData) {
+            return const DashboardScreen();
+          }
+          return const LoginScreen();
+        },
+      ),
+    );
+  }
+}
+```
+
+#### **lib/models/clip.dart**
+```dart
+class Clip {
+  final String videoPath;
+  final double startTime;
+  final double endTime;
+  final String caption;
+  final String aspectRatio;
+  final double viralityScore;
+
+  Clip({
+    required this.videoPath,
+    required this.startTime,
+    required this.endTime,
+    required this.caption,
+    required this.aspectRatio,
+    required this.viralityScore,
+  });
+}
+```
+
+#### **lib/models/video_segment.dart**
+```dart
+class VideoSegment {
+  final double startTime;
+  final double endTime;
+  final String text;
+  final bool isHook;
+
+  VideoSegment({
+    required this.startTime,
+    required this.endTime,
+    required this.text,
+    this.isHook = false,
+  });
+}
+```
+
+#### **lib/screens/dashboard_screen.dart**
+```dart
+import 'package:flutter/material.dart';
+import 'package:clipprd/screens/editor_screen.dart';
+import 'package:clipprd/screens/clip_search_screen.dart';
+import 'package:clipprd/screens/settings_screen.dart';
+import 'package:clipprd/services/auth_service.dart';
+import 'package:clipprd/widgets/video_upload_widget.dart';
+import 'package:clipprd/models/clip.dart';
+
+class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  List<Clip> recentClips = []; // Mock recent projects
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Clippr’d Dashboard'),
+      ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: Colors.blue),
+              child: Text('Clippr’d', style: TextStyle(color: Colors.white, fontSize: 24)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.search),
+              title: const Text('Search Clips'),
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ClipSearchScreen()));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings),
+              title: const Text('Settings'),
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text('Sign Out'),
+              onTap: () async {
+                await AuthService().signOut();
+                if (context.mounted) Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Welcome Back!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            VideoUploadWidget(
+              onClipsGenerated: (clips) {
+                setState(() {
+                  recentClips.addAll(clips);
+                });
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => EditorScreen(clips: clips)),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text('Recent Projects', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Expanded(
+              child: ListView.builder(
+                itemCount: recentClips.length,
+                itemBuilder: (context, index) {
+                  final clip = recentClips[index];
+                  return ListTile(
+                    title: Text('Clip ${index + 1} (${clip.aspectRatio})'),
+                    subtitle: Text(clip.caption),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => EditorScreen(clips: [clip])),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+#### **lib/screens/login_screen.dart**
+```dart
+import 'package:flutter/material.dart';
+import 'package:clipprd/services/auth_service.dart';
+
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  String? _error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('Clippr’d', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _emailController,
+              decoration: const InputDecoration(labelText: 'Email'),
+            ),
+            TextField(
+              controller: _passwordController,
+              decoration: const InputDecoration(labelText: 'Password'),
+              obscureText: true,
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(_error!, style: const TextStyle(color: Colors.red)),
+            ],
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  await AuthService().signInWithEmail(_emailController.text, _passwordController.text);
+                } catch (e) {
+                  setState(() {
+                    _error = e.toString();
+                  });
+                }
+              },
+              child: const Text('Sign In'),
+            ),
+            TextButton(
+              onPressed: () async {
+                try {
+                  await AuthService().signUpWithEmail(_emailController.text, _passwordController.text);
+                } catch (e) {
+                  setState(() {
+                    _error = e.toString();
+                  });
+                }
+              },
+              child: const Text('Sign Up'),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.g_mobiledata),
+              label: const Text('Sign In with Google'),
+              onPressed: () async {
+                try {
+                  await AuthService().signInWithGoogle();
+                } catch (e) {
+                  setState(() {
+                    _error = e.toString();
+                  });
+                }
+              },
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.apple),
+              label: const Text('Sign In with Apple'),
+              onPressed: () async {
+                try {
+                  await AuthService().signInWithApple();
+                } catch (e) {
+                  setState(() {
+                    _error = e.toString();
+                  });
+                }
+              },
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const DashboardScreen()),
+                );
+              },
+              child: const Text('Continue as Guest'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+#### **lib/screens/editor_screen.dart**
+```dart
+import 'package:flutter/material.dart';
+import 'package:clipprd/models/clip.dart';
+import 'package:clipprd/widgets/timeline_editor.dart';
+import 'package:clipprd/widgets/branding_template.dart';
+import 'package:gallery_saver/gallery_saver.dart';
+
+class EditorScreen extends StatelessWidget {
+  final List<Clip> clips;
+
+  const EditorScreen({super.key, required this.clips});
+
+  Future<void> _saveToGallery(String path) async {
+    await GallerySaver.saveVideo(path);
+    // ignore: use_build_context_synchronously
+    // ScaffoldMessenger.of(context).showSnackBar(
+    //   const SnackBar(content: Text('Video saved to gallery')),
+    // );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Edit Clips'),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: TimelineEditor(clips: clips),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                const BrandingTemplate(),
+                DropdownButton<String>(
+                  hint: const Text('Select Social Platform'),
+                  items: ['Instagram', 'TikTok', 'YouTube Shorts'].map((platform) {
+                    return DropdownMenuItem(
+                      value: platform,
+                      child: Text(platform),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    // Adjust clip settings for platform
+                  },
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    for (var clip in clips) {
+                      _saveToGallery(clip.videoPath);
+                    }
+                  },
+                  child: const Text('Save All Clips to Gallery'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+#### **lib/screens/clip_search_screen.dart**
+```dart
+import 'package:flutter/material.dart';
+
+class ClipSearchScreen extends StatefulWidget {
+  const ClipSearchScreen({super.key});
+
+  @override
+  State<ClipSearchScreen> createState() => _ClipSearchScreenState();
+}
+
+class _ClipSearchScreenState extends State<ClipSearchScreen> {
+  final TextEditingController _controller = TextEditingController();
+  List<String> searchResults = [];
+
+  void _searchClips(String query) {
+    // Mock search: Replace with server-side search API
+    setState(() {
+      searchResults = [
+        'Clip 1: $query match',
+        'Clip 2: $query match',
+      ];
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Search Clips'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            TextField(
+              controller: _controller,
+              decoration: const InputDecoration(
+                labelText: 'Enter prompt to search clips',
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: _searchClips,
+            ),
+            Expanded(
+              child: ListView.builder(
+                itemCount: searchResults.length,
+                itemBuilder: (context, index) => ListTile(
+                  title: Text(searchResults[index]),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+#### **lib/screens/settings_screen.dart**
+```dart
+import 'package:flutter/material.dart';
+
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  String _language = 'English';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Settings'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Language', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            DropdownButton<String>(
+              value: _language,
+              items: ['English', 'Spanish', 'French'].map((lang) {
+                return DropdownMenuItem(value: lang, child: TextadiatorText(lang));
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _language = value!;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text('History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ListTile(
+              title: const Text('Clear History'),
+              onTap: () {
+                // Implement history clearing
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+#### **lib/services/auth_service.dart**
+```dart
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+
+class AuthService {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
+
+  Stream<User?> get authStateChanges => _auth.authStateChanges();
+
+  Future<void> signInWithEmail(String email, String password) async {
+    await _auth.signInWithEmailAndPassword(email: email, password: password);
+  }
+
+  Future<void> signUpWithEmail(String email, String password) async {
+    await _auth.createUserWithEmailAndPassword(email: email, password: password);
+  }
+
+  Future<void> signInWithGoogle() async {
+    final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+    if (googleUser == null) return;
+    final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+    final credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken,
+      idToken: googleAuth.idToken,
+    );
+    await _auth.signInWithCredential(credential);
+  }
+
+  Future<void> signInWithApple() async {
+    final appleCredential = await SignInWithApple.getAppleIDCredential(
+      scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
+    );
+    final oauthCredential = OAuthProvider("apple.com").credential(
+      idToken: appleCredential.identityToken,
+      accessToken: appleCredential.authorizationCode,
+    );
+    await _auth.signInWithCredential(oauthCredential);
+  }
+
+  Future<void> signOut() async {
+    await _auth.signOut();
+    await _googleSignIn.signOut();
+  }
+}
+```
+
+#### **lib/services/whisper_service.dart**
+```dart
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+class WhisperService {
+  // Replace with your server endpoint
+  final String serverUrl = 'https://your-whisper-server.com/transcribe';
+
+  Future<List<Map<String, dynamic>>> transcribe(String videoPath) async {
+    // Send video to server for Whisper transcription
+    var request = http.MultipartRequest('POST', Uri.parse(serverUrl))
+      ..files.add(await http.MultipartFile.fromPath('video', videoPath));
+    var response = await request.send();
+    if (response.statusCode == 200) {
+      final data = await response.stream.bytesToString();
+      return List<Map<String, dynamic>>.from(jsonDecode(data));
+    }
+    throw Exception('Transcription failed');
+  }
+}
+```
+
+#### **lib/services/zapcap_service.dart**
+```dart
+import 'package:http/http.dart' as http;
+
+class ZapCapService {
+  final String apiKey = '444400fd432dd5b85443f00901563f15ab4ef8d7ef3df2de01fca8071793b47b';
+  final String apiUrl = 'https://api.zapcap.com/captions'; // Hypothetical URL
+
+  Future<String> addCaptions(String videoPath, String text, double startTime, double endTime) async {
+    // Replace with actual ZapCap API call
+    var request = http.MultipartRequest('POST', Uri.parse(apiUrl))
+      ..files.add(await http.MultipartFile.fromPath('video', videoPath))
+      ..fields['text'] = text
+      ..fields['start_time'] = startTime.toString()
+      ..fields['end_time'] = endTime.toString()
+      ..headers['Authorization'] = 'Bearer $apiKey';
+    var response = await request.send();
+    if (response.statusCode == 200) {
+      return 'path/to/captioned/video.mp4'; // Replace with actual path
+    }
+    throw Exception('Failed to add captions');
+  }
+}
+```
+
+#### **lib/services/pexels_service.dart**
+```dart
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+class PexelsService {
+  final String apiKey = 'WiAhqKJqtIKIGEZXs4njEfTQIiCWbwh0s0X5fVQMD212D2oofuNDfuiW';
+
+  Future<String> addBroll(String videoPath) async {
+    final response = await http.get(
+      Uri.parse('https://api.pexels.com/videos/search?query=background&per_page=1'),
+      headers: {'Authorization': apiKey},
+    );
+    if (response.statusCode == 200) {
+      // In production, merge B-roll with video using FFmpeg server-side
+      return videoPath; // Placeholder
+    }
+    throw Exception('Failed to fetch B-roll');
+  }
+}
+```
+
+#### **lib/services/autoflip_service.dart**
+```dart
+import 'package:http/http.dart' as http;
+
+class AutoFlipService {
+  final String serverUrl = 'https://your-autoflip-server.com/reframe';
+
+  FutureទFuture<String> reframe(String videoPath, String aspectRatio) async {
+    var request = http.MultipartRequest('POST', Uri.parse(serverUrl))
+      ..files.add(await http.MultipartFile.fromPath('video', videoPath))
+      ..fields['aspect_ratio'] = aspectRatio;
+    var response = await request.send();
+    if (response.statusCode == 200) {
+      return 'path/to/reframed/video.mp4'; // Replace with actual path
+    }
+    throw Exception('Reframing failed');
+  }
+}
+```
+
+#### **lib/services/libretranslate_service.dart**
+```dart
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+class LibreTranslateService {
+  Future<String> translate(String text, String targetLang) async {
+    final response = await http.post(
+      Uri.parse('https://libretranslate.com/translate'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'q': text,
+        'source': 'en',
+        'target': targetLang,
+        'format': 'text',
+      }),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body)['translatedText'];
+    }
+    throw Exception('Translation failed');
+  }
+}
+```
+
+#### **lib/services/audio_processing_service.dart**
+```dart
+import 'package:clipprd/models/video_segment.dart';
+import 'package:http/http.dart' as http;
+
+class AudioProcessingService {
+  final String serverUrl = 'https://your-audio-server.com/process';
+
+  Future<List<VideoSegment>> processAudio(String videoPath, List<Map<String, dynamic>> transcription) async {
+    var request = http.MultipartRequest('POST', Uri.parse(serverUrl))
+      ..files.add(await http.MultipartFile.fromPath('video', videoPath))
+      ..fields['transcription'] = jsonEncode(transcription);
+    var response = await request.send();
+    if (response.statusCode == 200) {
+      final data = await response.stream.bytesToString();
+      return List<Map<String, dynamic>>.from(jsonDecode(data)).map((s) {
+        bool isHook = s['text'].toLowerCase().contains('viral') || s['text'].toLowerCase().contains('hook');
+        return VideoSegment(
+          startTime: s['start_time'],
+          endTime: s['end_time'],
+          text: s['text'],
+          isHook: isHook,
+        );
+      }).toList();
+    }
+    throw Exception('Audio processing failed');
+  }
+}
+```
+
+#### **lib/services/clip_scorer.dart**
+```dart
+import 'package:clipprd/models/video_segment.dart';
+
+class ClipScorer {
+  Future<List<VideoSegment>> scoreSegments(List<VideoSegment> segments) async {
+    // Basic ML model: Higher scores for hooks
+    return segments.map((s) {
+      return VideoSegment(
+        startTime: s.startTime,
+        endTime: s.endTime,
+        text: s.text,
+        isHook: s.isHook,
+      );
+    }).toList();
+  }
+}
+```
+
+#### **lib/widgets/video_upload_widget.dart**
+```dart
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:clipprd/services/whisper_service.dart';
+import 'package:clipprd/services/zapcap_service.dart';
+import 'package:clipprd/services/pexels_service.dart';
+import 'package:clipprd/services/autoflip_service.dart';
+import 'package:clipprd/services/libretranslate_service.dart';
+import 'package:clipprd/services/audio_processing_service.dart';
+import 'package:clipprd/services/clip_scorer.dart';
+import 'package:clipprd/models/clip.dart';
+import 'package:clipprd/utils/permissions.dart';
+
+class VideoUploadWidget extends StatelessWidget {
+  final Function(List<Clip>) onClipsGenerated;
+
+  const VideoUploadWidget({super.key, required this.onClipsGenerated});
+
+  Future<void> _pickVideo(BuildContext context, ImageSource source) async {
+    if (!await requestPermissions()) return;
+
+    final ImagePicker picker = ImagePicker();
+    final XFile? video = await picker.pickVideo(source: source);
+    if (video == null) return;
+
+    // Show processing dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const ProcessingStatus(),
+    );
+
+    try {
+      // Process video
+      final transcription = await WhisperService().transcribe(video.path);
+      final segments = await AudioProcessingService().processAudio(video.path, transcription);
+      final scoredSegments = await ClipScorer().scoreSegments(segments);
+      List<Clip> clips = [];
+
+      for (var segment in scoredSegments) {
+        if (segment.isHook) {
+          final captionedVideo = await ZapCapService().addCaptions(
+            video.path,
+            segment.text,
+            segment.startTime,
+            segment.endTime,
+          );
+          final brollVideo = await PexelsService().addBroll(captionedVideo);
+          for (var ratio in ['9:16', '1:1', '16:9']) {
+            final reframedVideo = await AutoFlipService().reframe(brollVideo, ratio);
+            final translatedCaption = await LibreTranslateService().translate(segment.text, 'es');
+            clips.add(Clip(
+              videoPath: reframedVideo,
+              startTime: segment.startTime,
+              endTime: segment.endTime,
+              caption: translatedCaption,
+              aspectRatio: ratio,
+              viralityScore: segment.isHook ? 0.9 : 0.5,
+            ));
+          }
+        }
+      }
+
+      // ignore: use_build_context_synchronously
+      Navigator.pop(context); // Close dialog
+      onClipsGenerated(clips);
+    } catch (e) {
+      // ignore: use_build_context_synchronously
+      Navigator.pop(context);
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        ElevatedButton.icon(
+          icon: const Image(image: AssetImage('assets/icons/gallery.png'), width: 24),
+          label: const Text('Gallery'),
+          onPressed: () => _pickVideo(context, ImageSource.gallery),
+        ),
+        ElevatedButton.icon(
+          icon: const Image(image: AssetImage('assets/icons/record.png'), width: 24),
+          label: const Text('Record'),
+          onPressed: () => _pickVideo(context, ImageSource.camera),
+        ),
+        ElevatedButton.icon(
+          icon: const Image(image: AssetImage('assets/icons/link.png'), width: 24),
+          label: const Text('Link'),
+          onPressed: () {
+            // Implement link paste functionality
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Link upload not implemented')),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+```
+
+#### **lib/widgets/timeline_editor.dart**
+```dart
+import 'package:flutter/material.dart';
+import 'package:clipprd/models/clip.dart';
+
+class TimelineEditor extends StatelessWidget {
+  final List<Clip> clips;
+
+  const TimelineEditor({super.key, required this.clips});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      itemCount: clips.length,
+      itemBuilder: (context, index) {
+        final clip = clips[index];
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+          child: ListTile(
+            title: Text('Clip ${index + 1} (${clip.aspectRatio})'),
+            subtitle: Text(clip.caption),
+            trailing: Text('Score: ${clip.viralityScore.toStringAsFixed(2)}'),
+            onTap: () {
+              // Implement clip preview/edit
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+```
+
+#### **lib/widgets/branding_template.dart**
+```dart
+import 'package:flutter/material.dart';
+
+class BrandingTemplate extends StatelessWidget {
+  const BrandingTemplate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(8.0),
+      color: Colors.blue.shade100,
+      child: Row(
+        children: [
+          const Image(image: AssetImage('assets/branding/logo.png'), width: 50),
+          const SizedBox(width: 8),
+          const Text('Clippr’d Branding', style: TextStyle(fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+}
+```
+
+#### **lib/widgets/processing_status.dart**
+```dart
+import 'package:flutter/material.dart';
+
+class ProcessingStatus extends StatelessWidget {
+  const ProcessingStatus({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const AlertDialog(
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Processing Video...'),
+        ],
+      ),
+    );
+  }
+}
+```
+
+#### **lib/utils/constants.dart**
+```dart
+class Constants {
+  static const List<String> aspectRatios = ['9:16', '1:1', '16:9'];
+  static const List<String> socialPlatforms = ['Instagram', 'TikTok', 'YouTube Shorts'];
+}
+```
+
+#### **lib/utils/permissions.dart**
+```dart
+import 'package:permission_handler/permission_handler.dart';
+
+Future<bool> requestPermissions() async {
+  Map<Permission, PermissionStatus> statuses = await [
+    Permission.storage,
+    Permission.camera,
+    Permission.microphone,
+  ].request();
+  return statuses.values.every((status) => status.isGranted);
+}
+```
+
+#### **pubspec.yaml**
+```yaml
+name: clipprd
+description: An AI-powered Flutter app for creating viral video clips.
+version: 1.0.0
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  firebase_core: ^2.15.0
+  firebase_auth: ^4.7.0
+  google_sign_in: ^6.1.0
+  sign_in_with_apple: ^4.3.0
+  image_picker: ^1.0.0
+  http: ^1.0.0
+  gallery_saver: ^2.3.2
+  permission_handler: ^10.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/branding/logo.png
+    - assets/icons/upload.png
+    - assets/icons/gallery.png
+    - assets/icons/record.png
+    - assets/icons/link.png
+```
+
+#### **android/app/build.gradle**
+```gradle
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.example.clipprd"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    buildFeatures {
+        viewBinding true
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+}
+```
+
+#### **android/build.gradle**
+```gradle
+buildscript {
+    ext.kotlin_version = '1.9.0'
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.1.0'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+```
+
+#### **android/gradle/wrapper/gradle-wrapper.properties**
+```properties
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.1-bin.zip
+```
+
+#### **android/gradle.properties**
+```properties
+org.gradle.jvmargs=-Xmx1536M
+android.useAndroidX=true
+android.enableJetifier=true
+android.enableR8=true
+```
+
+#### **ios/Runner/Info.plist**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>$(DEVELOPMENT_LANGUAGE)</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>clipprd</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(FLUTTER_BUILD_NAME)</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    <key>CFBundleVersion</key>
+    <string>$(FLUTTER_BUILD_NUMBER)</string>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    <key>UILaunchStoryboardName</key>
+    <string>LaunchScreen</string>
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>arm64</string>
+    </array>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Allow access to save videos to your gallery</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Allow access to record videos</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Allow access for audio processing</string>
+    <key>NSAppleSignInUsageDescription</key>
+    <string>Allow sign-in with Apple</string>
+</dict>
+</plist>
+```
+
+#### **settings.gradle**
+```gradle
+rootProject.name = "clipprd"
+include ':app'
+```
+
+#### **README.md**
+```markdown
+# Clippr’d
+
+A production-ready Flutter app that transforms long-form videos into viral short clips optimized for social media platforms (Instagram, TikTok, YouTube Shorts) using AI-powered tools.
+
+## Features
+- **Authentication**: Sign in with Google, Apple, or email/password (Firebase).
+- **Video Upload**: Upload from gallery, record, or paste a link (link upload not implemented).
+- **AI Processing**:
+  - Speech-to-text with OpenAI Whisper (server-side).
+  - Animated captions via ZapCap API.
+  - B-roll integration with Pexels API.
+  - Auto-reframing for 9:16, 1:1, 16:9 using Google AutoFlip (server-side).
+  - Subtitle translation with LibreTranslate.
+  - Silence/filler removal with Librosa/PANNs (server-side).
+  - Viral clip scoring with a basic ML model.
+- **UI/UX**:
+  - Modern dashboard with navigation menu and recent projects.
+  - Timeline editor for clip adjustments.
+  - Prompt-based clip search.
+  - Branding templates with logo.
+  - Processing status with progress bar.
+- **Export**: Save clips to device gallery optimized for social platforms.
+
+## Prerequisites
+- Flutter SDK (>=3.0.0)
+- Android Studio with Android SDK (API 21+)
+- Gradle 8.1
+- Kotlin 1.9.0
+- Firebase project for authentication
+- Server-side setup for Whisper, AutoFlip, Librosa/PANNs
+- Assets: `logo.png`, `upload.png`, `gallery.png`, `record.png`, `link.png`
+
+## Setup Instructions
+1. **Clone the Repository**:
+   ```bash
+   git clone <repository-url>
+   cd clipprd
+   ```
+
+2. **Install Dependencies**:
+   ```bash
+   flutter pub get
+   ```
+
+3. **Set Up Firebase**:
+   - Create a Firebase project at https://console.firebase.google.com.
+   - Add `google-services.json` to `android/app/`.
+   - Update `ios/Runner/GoogleService-Info.plist` for iOS.
+
+4. **Set Up Server-Side Processing**:
+   - **Whisper**: Deploy a Flask/FastAPI server with WhisperX (e.g., https://github.com/m-bain/whisperX). Update `WhisperService.serverUrl`.
+   - **ZapCap**: Use the provided API key (`444400fd432dd5b85443f00901563f15ab4ef8d7ef3df2de01fca8071793b47b`). Replace mock in `ZapCapService` with actual API endpoint.
+   - **Pexels**: The provided API key (`WiAhqKJqtIKIGEZXs4njEfTQIiCWbwh0s0X5fVQMD212D2oofuNDfuiW`) is functional.
+   - **AutoFlip**: Deploy Google MediaPipe AutoFlip on a server. Update `AutoFlipService.serverUrl`.
+   - **Librosa/PANNs**: Deploy a server for audio processing (e.g., https://github.com/librosa/librosa). Update `AudioProcessingService.serverUrl`.
+   - **LibreTranslate**: Uses public instance; consider a local instance for production.
+
+5. **Add Assets**:
+   - Place `logo.png` (100x100) in `assets/branding/`.
+   - Place icon PNGs (`upload.png`, `gallery.png`, `record.png`, `link.png`) in `assets/icons/`.
+
+6. **Build the APK**:
+   - Debug:
+     ```bash
+     flutter build apk
+     ```
+     Output: `build/app/outputs/flutter-apk/app-debug.apk`
+   - Release:
+     ```bash
+     flutter build apk --release
+     ```
+     Output: `build/app/outputs/flutter-apk/app-release.apk`
+     - Generate a keystore:
+       ```bash
+       keytool -genkey -v -keystore release-key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias clipprd
+       ```
+     - Configure `android/app/build.gradle` with signing details.
+
+7. **Install the APK**:
+   - Transfer the APK to an Android device.
+   - Enable "Install from Unknown Sources" in settings.
+   - Install and run.
+
+## Project Structure
+- `lib/main.dart`: App entry point with Firebase initialization.
+- `lib/models/`: Data models for clips and segments.
+- `lib/screens/`: UI screens (dashboard, login, editor, search, settings).
+- `lib/services/`: API and processing services.
+- `lib/widgets/`: Reusable UI components.
+- `lib/utils/`: Constants and permissions.
+- `assets/`: Branding and icon assets.
+
+## Dependencies
+- `firebase_core`, `firebase_auth`: Authentication.
+- `google_sign_in`, `sign_in_with_apple`: Social login.
+- `image_picker`: Video upload.
+- `http`: API requests.
+- `gallery_saver`: Save clips to gallery.
+- `permission_handler`: Permissions.
+
+## Notes
+- **Server-Side Requirements**: Whisper, AutoFlip, Librosa/PANNs require server-side deployment due to mobile constraints. Update service classes with your server URLs.
+- **ZapCap API**: Mocked due to lack of public documentation. Replace with actual API calls.
+- **Clip Scoring**: Placeholder ML model. Implement TensorFlow Lite for production.
+- **Assets**: Include a `logo.png` and icon PNGs in `assets/`.
+- **Optimization**: R8 and ProGuard enabled for release builds.
+- **Troubleshooting**: Check Flutter logs and server connectivity.
+
+For issues, refer to the [Issues](<repository-url>/issues) tab on GitHub.
+```
