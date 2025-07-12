@@ -77,6 +77,7 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
+    // Ensure minSdkVersion aligns with FFmpegKit full-gpl requirement (API 24+).
     namespace "com.viralityclipprx"
     defaultConfig {
         applicationId "com.viralityclipprx"
@@ -104,6 +105,14 @@ android {
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
+    }
+
+    // Resolve duplicate libc++_shared binaries coming from FFmpegKit AAR.
+    packagingOptions {
+        pickFirst 'lib/x86/libc++_shared.so'
+        pickFirst 'lib/x86_64/libc++_shared.so'
+        pickFirst 'lib/armeabi-v7a/libc++_shared.so'
+        pickFirst 'lib/arm64-v8a/libc++_shared.so'
     }
 }
 
