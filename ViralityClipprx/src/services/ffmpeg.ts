@@ -35,3 +35,14 @@ export async function getMediaInfo(path: string): Promise<Record<string, any> | 
     return null;
   }
 }
+
+/**
+ * Executes an FFmpeg command and returns both success flag and concatenated console output logs.
+ */
+export async function executeWithLogs(command: string): Promise<{ ok: boolean; logs: string }> {
+  const session = await FFmpegKit.execute(command);
+  const logsArr = await session.getLogs();
+  const logs = logsArr.map((l) => l.getMessage()).join('\n');
+  const rc = await session.getReturnCode();
+  return { ok: ReturnCode.isSuccess(rc), logs };
+}

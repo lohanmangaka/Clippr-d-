@@ -1,4 +1,4 @@
-import { FFmpegKit, ReturnCode } from 'ffmpeg-kit-react-native';
+import { executeWithLogs } from './ffmpeg';
 import { ClipWindow } from './videoProcessor';
 import RNFS from 'react-native-fs';
 import uuid from 'react-native-uuid';
@@ -6,13 +6,9 @@ import { ensureDirectories, CACHE_DIR } from '../config/directories';
 
 /** Helper to run FFmpeg command and return full console output */
 async function runAndGetOutput(cmd: string): Promise<string> {
-  const session = await FFmpegKit.execute(cmd);
-  const output = await session.getOutput();
-  const rc = await session.getReturnCode();
-  if (!ReturnCode.isSuccess(rc)) {
-    console.warn('FFmpeg analysis command failed', cmd);
-  }
-  return output ?? '';
+  const { ok, logs } = await executeWithLogs(cmd);
+  if (!ok) console.warn('FFmpeg analysis command failed', cmd);
+  return logs;
 }
 
 /** Silence detection to produce speech sections using silencedetect logs */
