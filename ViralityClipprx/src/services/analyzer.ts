@@ -1,21 +1,16 @@
-import { executeWithLogs } from './ffmpeg';
+import { executeWithLogs, tail } from './ffmpeg';
 import { ClipWindow } from './videoProcessor';
 import RNFS from 'react-native-fs';
 import { generateId } from '../utils/id';
 import { registerTemp } from '../utils/tempManager';
 import { ensureDirectories, CACHE_DIR } from '../config/directories';
-
-// Configurable weights – tweakable via UI later
-export const WEIGHTS = {
-  speech: 1,
-  scene: 3,
-  balancePenalty: 0.1,
-};
+import weights from '../config/weights.json';
+export const WEIGHTS = weights as { speech: number; scene: number; balancePenalty: number };
 
 /** Helper to run FFmpeg command and return full console output */
 async function runAndGetOutput(cmd: string): Promise<string> {
   const { ok, logs } = await executeWithLogs(cmd);
-  if (!ok) console.warn('FFmpeg analysis command failed', cmd);
+  if (!ok) throw new Error(`FFmpeg analysis failed\n${tail(logs)}`);
   return logs;
 }
 

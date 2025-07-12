@@ -93,7 +93,7 @@ const ProcessingScreen: React.FC<ProcessingScreenProps> = ({ route, navigation }
   return (
     <View style={styles.container}>
       <ActivityIndicator size="large" />
-      <Text style={styles.text}>{progressText}</Text>
+      <Text style={styles.text}>{`${progressText} (${Math.round(progress * 100)}%)`}</Text>
       <ProgressBar progress={progress} />
     </View>
   );

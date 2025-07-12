@@ -46,3 +46,6 @@ export async function executeWithLogs(command: string): Promise<{ ok: boolean; l
   const rc = await session.getReturnCode();
   return { ok: ReturnCode.isSuccess(rc), logs };
 }
+
+/** Return last n lines of log string */
+export const tail = (log: string, n = 4): string => log.split('\n').slice(-n).join('\n');
