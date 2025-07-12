@@ -12,71 +12,85 @@ async function runAndGetOutput(cmd: string): Promise<string> {
 }
 
 /** Silence detection to produce speech sections using silencedetect logs */
-export async function detectSpeechSections(path: string, noiseThreshold = -35, silenceDuration = 0.4): Promise<Array<[number, number]>> {
-  const cmd = `-vn -i "${path}" -af silencedetect=noise=${noiseThreshold}dB:d=${silenceDuration} -f null -`;
-  let logs = '';
-  try {
-    logs = await runAndGetOutput(cmd);
-  } catch (e) {
-    console.warn('silencedetect failed', e);
-    return [];
-  }
+export async function detectSpeechSections(path: string): Promise<Array<[number, number]>> {
+  const thresholds = [-35, -40, -45];
+  const silenceDuration = 0.4;
 
-  const speechSections: Array<[number, number]> = [];
-  let lastSilenceEnd = 0;
-  const silenceStartRegex = /silence_start: (\d+(?:\.\d+)?)/;
-  const silenceEndRegex = /silence_end: (\d+(?:\.\d+)?)/;
-
-  const lines = logs.split(/\r?\n/);
-  let currentSilenceStart: number | null = null;
-
-  for (const line of lines) {
-    let match = line.match(silenceStartRegex);
-    if (match) {
-      const silenceStart = parseFloat(match[1]);
-      // speech is from lastSilenceEnd to silenceStart
-      if (silenceStart > lastSilenceEnd) {
-        speechSections.push([lastSilenceEnd, silenceStart]);
-      }
-      currentSilenceStart = silenceStart;
+  for (const noiseThreshold of thresholds) {
+    const cmd = `-vn -i "${path}" -af silencedetect=noise=${noiseThreshold}dB:d=${silenceDuration} -f null -`;
+    let logs = '';
+    try {
+      logs = await runAndGetOutput(cmd);
+    } catch (e) {
+      console.warn('silencedetect failed at threshold', noiseThreshold, e);
       continue;
     }
 
-    match = line.match(silenceEndRegex);
-    if (match) {
-      const silenceEnd = parseFloat(match[1]);
-      lastSilenceEnd = silenceEnd;
-      currentSilenceStart = null;
+    const speechSections: Array<[number, number]> = [];
+    let lastSilenceEnd = 0;
+    const silenceStartRegex = /silence_start: (\d+(?:\.\d+)?)/;
+    const silenceEndRegex = /silence_end: (\d+(?:\.\d+)?)/;
+
+    const lines = logs.split(/\r?\n/);
+    let currentSilenceStart: number | null = null;
+
+    for (const line of lines) {
+      let match = line.match(silenceStartRegex);
+      if (match) {
+        const silenceStart = parseFloat(match[1]);
+        // speech is from lastSilenceEnd to silenceStart
+        if (silenceStart > lastSilenceEnd) {
+          speechSections.push([lastSilenceEnd, silenceStart]);
+        }
+        currentSilenceStart = silenceStart;
+        continue;
+      }
+
+      match = line.match(silenceEndRegex);
+      if (match) {
+        const silenceEnd = parseFloat(match[1]);
+        lastSilenceEnd = silenceEnd;
+        currentSilenceStart = null;
+      }
+    }
+
+    // Handle tail speech after last silence
+    speechSections.push([lastSilenceEnd, Number.MAX_SAFE_INTEGER]);
+
+    // Filter out zero-length segments and clamp negatives
+    const result = speechSections.filter(([s, e]) => e - s > 1 && s >= 0);
+    if (result.length > 0) {
+      return result;
     }
   }
-
-  // Handle tail speech after last silence
-  speechSections.push([lastSilenceEnd, Number.MAX_SAFE_INTEGER]);
-
-  // Filter out zero-length segments and clamp negatives
-  return speechSections.filter(([s, e]) => e - s > 1 && s >= 0);
+  // fallback empty
+  return [];
 }
 
 /** Scene change detection extracting pts_time values where scene threshold exceeded */
-export async function detectSceneChanges(path: string, threshold = 0.35): Promise<number[]> {
-  const cmd = `-i "${path}" -vf select='gt(scene,${threshold})',showinfo -f null -`;
-  let logs = '';
-  try {
-    logs = await runAndGetOutput(cmd);
-  } catch (e) {
-    console.warn('scene detect failed', e);
-    return [];
-  }
-
-  const times: number[] = [];
-  const regex = /showinfo.*pts_time:([0-9]+\.?[0-9]*)/;
-  logs.split(/\r?\n/).forEach((line) => {
-    const m = line.match(regex);
-    if (m) {
-      times.push(parseFloat(m[1]));
+export async function detectSceneChanges(path: string): Promise<number[]> {
+  const thresholds = [0.35, 0.3, 0.25];
+  for (const threshold of thresholds) {
+    const cmd = `-i "${path}" -vf select='gt(scene,${threshold})',showinfo -f null -`;
+    let logs = '';
+    try {
+      logs = await runAndGetOutput(cmd);
+    } catch (e) {
+      console.warn('scene detect failed', e);
+      continue;
     }
-  });
-  return times.sort((a,b)=>a-b);
+
+    const times: number[] = [];
+    const regex = /showinfo.*pts_time:([0-9]+\.?[0-9]*)/;
+    logs.split(/\r?\n/).forEach((line) => {
+      const m = line.match(regex);
+      if (m) {
+        times.push(parseFloat(m[1]));
+      }
+    });
+    if (times.length > 0) return times.sort((a, b) => a - b);
+  }
+  return [];
 }
 
 /** Generate thumbnail images (jpg) at provided timestamps */
@@ -104,7 +118,8 @@ export function scoreHighlightWindows(
   topK = 5,
 ): ClipWindow[] {
   const speechWeight = 1;
-  const sceneWeight = 2.5;
+  const sceneWeight = 3;
+  const balanceFactor = 0.1; // penalize gaps without scenes or speech
   const candidates: { window: ClipWindow; score: number }[] = [];
 
   speechSections.forEach(([startSpeech, endSpeech]) => {
@@ -117,7 +132,7 @@ export function scoreHighlightWindows(
       const winEnd = winStart + windowSize;
       const sceneCount = sceneTimes.filter((t) => t >= winStart && t <= winEnd).length;
       const speechCoverage = Math.min(endSpeech, winEnd) - winStart;
-      const score = speechCoverage * speechWeight + sceneCount * sceneWeight;
+      const score = speechCoverage * speechWeight + sceneCount * sceneWeight - balanceFactor * Math.abs(sceneCount - speechCoverage / windowSize);
       candidates.push({ window: { start: winStart, duration: windowSize }, score });
     }
   });
