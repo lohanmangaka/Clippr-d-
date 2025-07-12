@@ -1,0 +1,70 @@
+{
+  "name": "viralityclipprx",
+  "version": "1.0.0",
+  "description": "Fully offline, production-ready mobile app that intelligently clips the best parts of videos",
+  "main": "index.js",
+  "scripts": {
+    "android": "react-native run-android",
+    "ios": "react-native run-ios",
+    "start": "react-native start",
+    "test": "jest",
+    "lint": "eslint .",
+    "build-android": "cd android && ./gradlew assembleRelease",
+    "build-apk": "cd android && ./gradlew assembleRelease && cp app/build/outputs/apk/release/app-release.apk ../ViralityClipprx.apk"
+  },
+  "dependencies": {
+    "react": "18.2.0",
+    "react-native": "0.72.6",
+    "react-native-ffmpeg": "^0.5.2",
+    "react-native-fs": "^2.20.0",
+    "react-native-vector-icons": "^10.0.0",
+    "react-native-gesture-handler": "^2.12.0",
+    "react-native-reanimated": "^3.5.4",
+    "react-native-safe-area-context": "^4.7.2",
+    "react-native-screens": "^3.25.0",
+    "@react-navigation/native": "^6.1.7",
+    "@react-navigation/stack": "^6.3.17",
+    "react-native-video": "^5.2.1",
+    "react-native-slider": "^2.3.0",
+    "react-native-progress": "^5.0.1",
+    "react-native-document-picker": "^9.1.1",
+    "react-native-share": "^9.4.1",
+    "react-native-permissions": "^3.10.1",
+    "react-native-toast-message": "^2.1.6",
+    "react-native-linear-gradient": "^2.8.3",
+    "react-native-svg": "^13.14.0",
+    "react-native-modal": "^13.0.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0",
+    "@babel/preset-env": "^7.20.0",
+    "@babel/runtime": "^7.20.0",
+    "@react-native/eslint-config": "^0.72.2",
+    "@react-native/metro-config": "^0.72.11",
+    "@tsconfig/react-native": "^3.0.0",
+    "@types/react": "^18.0.24",
+    "@types/react-test-renderer": "^18.0.0",
+    "babel-jest": "^29.2.1",
+    "eslint": "^8.19.0",
+    "jest": "^29.2.1",
+    "metro-react-native-babel-preset": "0.76.8",
+    "prettier": "^2.4.1",
+    "react-test-renderer": "18.2.0",
+    "typescript": "4.8.4"
+  },
+  "jest": {
+    "preset": "react-native"
+  },
+  "keywords": [
+    "react-native",
+    "video-editing",
+    "offline",
+    "ffmpeg",
+    "whisper",
+    "tiktok",
+    "viral",
+    "clips"
+  ],
+  "author": "ViralityClipprx Team",
+  "license": "MIT"
+}
