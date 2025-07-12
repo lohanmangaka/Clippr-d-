@@ -2,6 +2,7 @@ import { executeWithLogs } from './ffmpeg';
 import { ClipWindow } from './videoProcessor';
 import RNFS from 'react-native-fs';
 import { generateId } from '../utils/id';
+import { registerTemp } from '../utils/tempManager';
 import { ensureDirectories, CACHE_DIR } from '../config/directories';
 
 /** Helper to run FFmpeg command and return full console output */
@@ -100,6 +101,7 @@ export async function generateThumbnails(path: string, times: number[]): Promise
 
   for (const t of times) {
     const outPath = `${CACHE_DIR}/thumb_${generateId()}.jpg`;
+    registerTemp(outPath);
     const cmd = `-y -ss ${t} -i "${path}" -vf scale=320:-1 -frames:v 1 -q:v 3 "${outPath}"`;
     const logs = await runAndGetOutput(cmd);
     if (await RNFS.exists(outPath)) {

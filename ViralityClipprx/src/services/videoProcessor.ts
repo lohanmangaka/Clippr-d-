@@ -2,6 +2,7 @@ import { ensureDirectories, TEMP_DIR, OUTPUT_DIR } from '../config/directories';
 import { runFFmpeg } from './ffmpeg';
 import RNFS from 'react-native-fs';
 import { generateId } from '../utils/id';
+import { registerTemp } from '../utils/tempManager';
 
 export interface ClipWindow {
   /** seconds */
@@ -23,6 +24,7 @@ export async function generateHighlightClips(
   const results: string[] = [];
   for (const window of windows) {
     const outputPath = `${TEMP_DIR}/clip_${generateId()}.mp4`;
+    registerTemp(outputPath);
     const ffCmd = `-y -i "${inputPath}" -ss ${window.start} -t ${window.duration} -c copy "${outputPath}"`;
     const ok = await runFFmpeg(ffCmd);
     if (ok) {
@@ -42,10 +44,12 @@ export async function concatAndFormatVertical(clips: string[]): Promise<string |
 
   // Write a concat list file
   const listFile = `${TEMP_DIR}/concat_${Date.now()}.txt`;
+  registerTemp(listFile);
   const concatContent = clips.map((c) => `file '${c}'`).join('\n');
   await RNFS.writeFile(listFile, concatContent, 'utf8');
 
   const outputFinal = `${OUTPUT_DIR}/highlight_${Date.now()}.mp4`;
+  registerTemp(outputFinal);
 
   // Scale & crop to 9:16 (assumes landscape source; adjust as needed)
   const filter = "scale=1080:-2,crop=1080:1920";

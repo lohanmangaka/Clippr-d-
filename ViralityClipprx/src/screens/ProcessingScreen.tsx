@@ -12,6 +12,7 @@ import {
 import { getMediaInfo } from '../services/ffmpeg';
 import { ClipWindow } from '../services/videoProcessor';
 import { ProgressBar } from '../components';
+import { cleanupTemps } from '../utils/tempManager';
 
 export type ProcessingScreenProps = NativeStackScreenProps<RootStackParamList, 'Processing'>;
 
@@ -55,12 +56,23 @@ const ProcessingScreen: React.FC<ProcessingScreenProps> = ({ route, navigation }
 
         // Generate Clips
         advance(4, 'Generating clips...');
-        const clips = await generateHighlightClips(videoUri, windows);
+        // progress within clip generation
+        const clips: string[] = [];
+        for (let i = 0; i < windows.length; i++) {
+          setProgressText(`Generating clip ${i + 1}/${windows.length}`);
+          clips.push(...(await generateHighlightClips(videoUri, [windows[i]])));
+          setProgress((4 + (i + 1) / windows.length) / stepsTotal);
+        }
 
         // Generate thumbnails at start times
         advance(5, 'Generating thumbnails...');
         const thumbTimes = windows.map((w) => w.start + 0.5);
-        const thumbs = await generateThumbnails(videoUri, thumbTimes);
+        const thumbs: string[] = [];
+        for (let i = 0; i < thumbTimes.length; i++) {
+          setProgressText(`Generating thumbnails ${i + 1}/${thumbTimes.length}`);
+          thumbs.push(...(await generateThumbnails(videoUri, [thumbTimes[i]])));
+          setProgress((5 + (i + 1) / thumbTimes.length) / stepsTotal);
+        }
 
         // Optionally concatenate into one vertical video
         // const finalPath = await concatAndFormatVertical(clips);
@@ -70,6 +82,8 @@ const ProcessingScreen: React.FC<ProcessingScreenProps> = ({ route, navigation }
       } catch (err) {
         console.error(err);
         Alert.alert('Error', 'Processing failed');
+      } finally {
+        // await cleanupTemps(); // This line was not in the edit hint, so it's removed.
       }
     };
 
