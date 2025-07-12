@@ -1,2 +1,2 @@
 // Re-export shared UI components here as you create them.
-export {};
+export { default as PrimaryButton } from './PrimaryButton';
