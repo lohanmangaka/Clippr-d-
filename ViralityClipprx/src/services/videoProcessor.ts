@@ -1,7 +1,7 @@
 import { ensureDirectories, TEMP_DIR, OUTPUT_DIR } from '../config/directories';
 import { runFFmpeg } from './ffmpeg';
 import RNFS from 'react-native-fs';
-import uuid from 'react-native-uuid';
+import { generateId } from '../utils/id';
 
 export interface ClipWindow {
   /** seconds */
@@ -22,7 +22,7 @@ export async function generateHighlightClips(
 
   const results: string[] = [];
   for (const window of windows) {
-    const outputPath = `${TEMP_DIR}/clip_${uuid.v4()}.mp4`;
+    const outputPath = `${TEMP_DIR}/clip_${generateId()}.mp4`;
     const ffCmd = `-y -i "${inputPath}" -ss ${window.start} -t ${window.duration} -c copy "${outputPath}"`;
     const ok = await runFFmpeg(ffCmd);
     if (ok) {
