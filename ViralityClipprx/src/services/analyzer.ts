@@ -12,9 +12,15 @@ async function runAndGetOutput(cmd: string): Promise<string> {
 }
 
 /** Silence detection to produce speech sections using silencedetect logs */
-export async function detectSpeechSections(path: string, noiseThreshold = -30, silenceDuration = 0.5): Promise<Array<[number, number]>> {
+export async function detectSpeechSections(path: string, noiseThreshold = -35, silenceDuration = 0.4): Promise<Array<[number, number]>> {
   const cmd = `-vn -i "${path}" -af silencedetect=noise=${noiseThreshold}dB:d=${silenceDuration} -f null -`;
-  const logs = await runAndGetOutput(cmd);
+  let logs = '';
+  try {
+    logs = await runAndGetOutput(cmd);
+  } catch (e) {
+    console.warn('silencedetect failed', e);
+    return [];
+  }
 
   const speechSections: Array<[number, number]> = [];
   let lastSilenceEnd = 0;
@@ -48,13 +54,19 @@ export async function detectSpeechSections(path: string, noiseThreshold = -30, s
   speechSections.push([lastSilenceEnd, Number.MAX_SAFE_INTEGER]);
 
   // Filter out zero-length segments and clamp negatives
-  return speechSections.filter(([s, e]) => e - s > 0.1 && s >= 0);
+  return speechSections.filter(([s, e]) => e - s > 1 && s >= 0);
 }
 
 /** Scene change detection extracting pts_time values where scene threshold exceeded */
-export async function detectSceneChanges(path: string, threshold = 0.4): Promise<number[]> {
+export async function detectSceneChanges(path: string, threshold = 0.35): Promise<number[]> {
   const cmd = `-i "${path}" -vf select='gt(scene,${threshold})',showinfo -f null -`;
-  const logs = await runAndGetOutput(cmd);
+  let logs = '';
+  try {
+    logs = await runAndGetOutput(cmd);
+  } catch (e) {
+    console.warn('scene detect failed', e);
+    return [];
+  }
 
   const times: number[] = [];
   const regex = /showinfo.*pts_time:([0-9]+\.?[0-9]*)/;
@@ -64,7 +76,7 @@ export async function detectSceneChanges(path: string, threshold = 0.4): Promise
       times.push(parseFloat(m[1]));
     }
   });
-  return times;
+  return times.sort((a,b)=>a-b);
 }
 
 /** Generate thumbnail images (jpg) at provided timestamps */
@@ -74,7 +86,7 @@ export async function generateThumbnails(path: string, times: number[]): Promise
 
   for (const t of times) {
     const outPath = `${CACHE_DIR}/thumb_${uuid.v4()}.jpg`;
-    const cmd = `-y -ss ${t} -i "${path}" -frames:v 1 -q:v 3 "${outPath}"`;
+    const cmd = `-y -ss ${t} -i "${path}" -vf scale=320:-1 -frames:v 1 -q:v 3 "${outPath}"`;
     const logs = await runAndGetOutput(cmd);
     if (await RNFS.exists(outPath)) {
       outputPaths.push(outPath);
@@ -91,6 +103,8 @@ export function scoreHighlightWindows(
   windowSize = 30,
   topK = 5,
 ): ClipWindow[] {
+  const speechWeight = 1;
+  const sceneWeight = 2.5;
   const candidates: { window: ClipWindow; score: number }[] = [];
 
   speechSections.forEach(([startSpeech, endSpeech]) => {
@@ -103,7 +117,7 @@ export function scoreHighlightWindows(
       const winEnd = winStart + windowSize;
       const sceneCount = sceneTimes.filter((t) => t >= winStart && t <= winEnd).length;
       const speechCoverage = Math.min(endSpeech, winEnd) - winStart;
-      const score = speechCoverage + sceneCount * 2;
+      const score = speechCoverage * speechWeight + sceneCount * sceneWeight;
       candidates.push({ window: { start: winStart, duration: windowSize }, score });
     }
   });

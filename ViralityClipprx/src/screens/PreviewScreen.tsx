@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 import { PrimaryButton } from '../components';
@@ -30,14 +30,8 @@ const PreviewScreen: React.FC<PreviewScreenProps> = ({ route, navigation }) => {
     const thumb = thumbs?.[index];
     return (
       <TouchableOpacity style={styles.clipItem} onPress={() => {}}>
-        {thumb ? (
-          <View style={styles.thumbRow}>
-            <Text style={styles.clipText}>{index + 1}.</Text>
-            <Text numberOfLines={1} style={[styles.clipText, { flex: 1 }]}> {item}</Text>
-          </View>
-        ) : (
-          <Text numberOfLines={1} style={styles.clipText}>{item}</Text>
-        )}
+        {thumb && <Image source={{ uri: 'file://' + thumb }} style={styles.thumb} />}
+        <Text numberOfLines={1} style={[styles.clipText, { flex: 1 }]}>Clip {index + 1}</Text>
       </TouchableOpacity>
     );
   };
@@ -66,9 +60,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: '#ccc',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   clipText: {
     fontSize: 14,
+  },
+  thumb: {
+    width: 60,
+    height: 60,
+    marginRight: 12,
+    borderRadius: 4,
   },
   thumbRow: {
     flexDirection: 'row',
