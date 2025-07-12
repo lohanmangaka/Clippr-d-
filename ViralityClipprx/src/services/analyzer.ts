@@ -1,81 +1,130 @@
-import { runFFmpeg } from './ffmpeg';
-import { transcribe, WhisperSegment } from './whisper';
+import { FFmpegKit, ReturnCode } from 'ffmpeg-kit-react-native';
 import { ClipWindow } from './videoProcessor';
-
-/**
- * Detect silent intervals using FFmpeg silencedetect filter.
- * Returns an array of [start, end] in seconds where sound is present.
- */
-export async function detectSpeechSections(path: string): Promise<Array<[number, number]>> {
-  const noiseThreshold = -30; // dB
-  const silenceDuration = 0.5; // seconds
-  const cmd = `-vn -i "${path}" -af silencedetect=noise=${noiseThreshold}dB:d=${silenceDuration} -f null -`;
-
-  const session = await runFFmpeg(cmd);
-  // runFFmpeg returns boolean; we need logs. We'll instead execute directly & capture output using FFmpegKit.
-  // For brevity use placeholder implementation until advanced integration.
-  // TODO: implement detailed parsing using FFmpegKit.execute and session.getOutput().
-  return [[0, 999999]]; // placeholder whole file
-}
-
-/**
- * Detect scene change timestamps using FFmpeg select filter.
- */
-export async function detectSceneChanges(path: string): Promise<number[]> {
-  const threshold = 0.4;
-  const cmd = `-i "${path}" -vf select='gt(scene,${threshold})',showinfo -f null -`;
-  await runFFmpeg(cmd);
-  return [];
-}
-
-/**
- * Generate thumbnails at specific timestamps.
- * Returns array of file paths.
- */
 import RNFS from 'react-native-fs';
 import uuid from 'react-native-uuid';
 import { ensureDirectories, CACHE_DIR } from '../config/directories';
 
-export async function generateThumbnails(path: string, times: number[]): Promise<string[]> {
-  await ensureDirectories();
-  const outPaths: string[] = [];
-  for (const t of times) {
-    const out = `${CACHE_DIR}/thumb_${uuid.v4()}.jpg`;
-    const cmd = `-y -ss ${t} -i "${path}" -frames:v 1 -q:v 2 "${out}"`;
-    const ok = await runFFmpeg(cmd);
-    if (ok && (await RNFS.exists(out))) {
-      outPaths.push(out);
-    }
+/** Helper to run FFmpeg command and return full console output */
+async function runAndGetOutput(cmd: string): Promise<string> {
+  const session = await FFmpegKit.execute(cmd);
+  const output = await session.getOutput();
+  const rc = await session.getReturnCode();
+  if (!ReturnCode.isSuccess(rc)) {
+    console.warn('FFmpeg analysis command failed', cmd);
   }
-  return outPaths;
+  return output ?? '';
 }
 
-/**
- * Highlight scoring algorithm combining speech density and scene changes.
- * Returns top windows sorted by score.
- */
-export function scoreHighlightWindows(speechSections: Array<[number, number]>, sceneTimes: number[], windowSize = 30, topK = 5): ClipWindow[] {
-  // Simple algorithm: center windows around speech sections, score by number of scene changes inside.
-  const windows: { w: ClipWindow; score: number }[] = [];
+/** Silence detection to produce speech sections using silencedetect logs */
+export async function detectSpeechSections(path: string, noiseThreshold = -30, silenceDuration = 0.5): Promise<Array<[number, number]>> {
+  const cmd = `-vn -i "${path}" -af silencedetect=noise=${noiseThreshold}dB:d=${silenceDuration} -f null -`;
+  const logs = await runAndGetOutput(cmd);
 
-  speechSections.forEach(([s, e]) => {
-    const mid = (s + e) / 2;
-    const start = Math.max(0, mid - windowSize / 2);
-    const window: ClipWindow = { start, duration: windowSize };
-    const end = start + windowSize;
-    const sceneCount = sceneTimes.filter((t) => t >= start && t <= end).length;
-    const speechDuration = e - s;
-    const score = speechDuration + sceneCount * 2; // weight scene changes
-    windows.push({ w: window, score });
+  const speechSections: Array<[number, number]> = [];
+  let lastSilenceEnd = 0;
+  const silenceStartRegex = /silence_start: (\d+(?:\.\d+)?)/;
+  const silenceEndRegex = /silence_end: (\d+(?:\.\d+)?)/;
+
+  const lines = logs.split(/\r?\n/);
+  let currentSilenceStart: number | null = null;
+
+  for (const line of lines) {
+    let match = line.match(silenceStartRegex);
+    if (match) {
+      const silenceStart = parseFloat(match[1]);
+      // speech is from lastSilenceEnd to silenceStart
+      if (silenceStart > lastSilenceEnd) {
+        speechSections.push([lastSilenceEnd, silenceStart]);
+      }
+      currentSilenceStart = silenceStart;
+      continue;
+    }
+
+    match = line.match(silenceEndRegex);
+    if (match) {
+      const silenceEnd = parseFloat(match[1]);
+      lastSilenceEnd = silenceEnd;
+      currentSilenceStart = null;
+    }
+  }
+
+  // Handle tail speech after last silence
+  speechSections.push([lastSilenceEnd, Number.MAX_SAFE_INTEGER]);
+
+  // Filter out zero-length segments and clamp negatives
+  return speechSections.filter(([s, e]) => e - s > 0.1 && s >= 0);
+}
+
+/** Scene change detection extracting pts_time values where scene threshold exceeded */
+export async function detectSceneChanges(path: string, threshold = 0.4): Promise<number[]> {
+  const cmd = `-i "${path}" -vf select='gt(scene,${threshold})',showinfo -f null -`;
+  const logs = await runAndGetOutput(cmd);
+
+  const times: number[] = [];
+  const regex = /showinfo.*pts_time:([0-9]+\.?[0-9]*)/;
+  logs.split(/\r?\n/).forEach((line) => {
+    const m = line.match(regex);
+    if (m) {
+      times.push(parseFloat(m[1]));
+    }
+  });
+  return times;
+}
+
+/** Generate thumbnail images (jpg) at provided timestamps */
+export async function generateThumbnails(path: string, times: number[]): Promise<string[]> {
+  await ensureDirectories();
+  const outputPaths: string[] = [];
+
+  for (const t of times) {
+    const outPath = `${CACHE_DIR}/thumb_${uuid.v4()}.jpg`;
+    const cmd = `-y -ss ${t} -i "${path}" -frames:v 1 -q:v 3 "${outPath}"`;
+    const logs = await runAndGetOutput(cmd);
+    if (await RNFS.exists(outPath)) {
+      outputPaths.push(outPath);
+    }
+  }
+
+  return outputPaths;
+}
+
+/** Improved highlight scoring algorithm combining speech density gaps and scene changes */
+export function scoreHighlightWindows(
+  speechSections: Array<[number, number]>,
+  sceneTimes: number[],
+  windowSize = 30,
+  topK = 5,
+): ClipWindow[] {
+  const candidates: { window: ClipWindow; score: number }[] = [];
+
+  speechSections.forEach(([startSpeech, endSpeech]) => {
+    const speechDuration = endSpeech - startSpeech;
+    if (speechDuration <= 1) return; // ignore tiny speech
+
+    // slide windows across speech section
+    const step = windowSize / 2;
+    for (let winStart = startSpeech; winStart < endSpeech; winStart += step) {
+      const winEnd = winStart + windowSize;
+      const sceneCount = sceneTimes.filter((t) => t >= winStart && t <= winEnd).length;
+      const speechCoverage = Math.min(endSpeech, winEnd) - winStart;
+      const score = speechCoverage + sceneCount * 2;
+      candidates.push({ window: { start: winStart, duration: windowSize }, score });
+    }
   });
 
-  // Deduplicate overlapping windows (keep higher score)
-  const dedup: { [key: string]: { w: ClipWindow; score: number } } = {};
-  windows.forEach((item) => {
-    const key = Math.round(item.w.start / 5).toString();
-    if (!dedup[key] || item.score > dedup[key].score) dedup[key] = item;
-  });
+  // Sort and pick topK without heavy overlap (>50% overlap)
+  candidates.sort((a, b) => b.score - a.score);
+  const selected: ClipWindow[] = [];
 
-  const sorted = Object.values(dedup).sort((a, b) => b.score - a.score).slice(0, topK);
-  return sorted.map((i) => i.w);
+  for (const c of candidates) {
+    if (selected.length >= topK) break;
+    const overlaps = selected.some((w) =>
+      Math.min(w.start + w.duration, c.window.start + c.window.duration) - Math.max(w.start, c.window.start) > windowSize / 2,
+    );
+    if (!overlaps) {
+      selected.push(c.window);
+    }
+  }
+
+  return selected;
 }
