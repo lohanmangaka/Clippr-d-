@@ -9,7 +9,7 @@ import { Share } from 'react-native';
 export type PreviewScreenProps = NativeStackScreenProps<RootStackParamList, 'Preview'>;
 
 const PreviewScreen: React.FC<PreviewScreenProps> = ({ route, navigation }) => {
-  const { clips } = route.params;
+  const { clips, thumbs } = route.params;
   const [exporting, setExporting] = useState(false);
 
   const handleExport = async () => {
@@ -26,16 +26,26 @@ const PreviewScreen: React.FC<PreviewScreenProps> = ({ route, navigation }) => {
     }
   };
 
-  const renderItem = ({ item }: { item: string }) => (
-    <TouchableOpacity style={styles.clipItem} onPress={() => {}}>
-      <Text numberOfLines={1} style={styles.clipText}>{item}</Text>
-    </TouchableOpacity>
-  );
+  const renderItem = ({ item, index }: { item: string; index: number }) => {
+    const thumb = thumbs?.[index];
+    return (
+      <TouchableOpacity style={styles.clipItem} onPress={() => {}}>
+        {thumb ? (
+          <View style={styles.thumbRow}>
+            <Text style={styles.clipText}>{index + 1}.</Text>
+            <Text numberOfLines={1} style={[styles.clipText, { flex: 1 }]}> {item}</Text>
+          </View>
+        ) : (
+          <Text numberOfLines={1} style={styles.clipText}>{item}</Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Generated Clips</Text>
-      <FlatList data={clips} keyExtractor={(i) => i} renderItem={renderItem} />
+      <FlatList data={clips} keyExtractor={(i) => i} renderItem={({ item, index }) => renderItem({ item, index })} />
       <PrimaryButton title={exporting ? 'Exporting...' : 'Export'} disabled={exporting} onPress={handleExport} />
       <PrimaryButton title="Done" onPress={() => navigation.popToTop()} />
     </View>
@@ -59,6 +69,10 @@ const styles = StyleSheet.create({
   },
   clipText: {
     fontSize: 14,
+  },
+  thumbRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });
 

@@ -2,7 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
-import { generateHighlightClips, concatAndFormatVertical, ClipWindow } from '../services/videoProcessor';
+import { generateHighlightClips, concatAndFormatVertical } from '../services/videoProcessor';
+import {
+  detectSpeechSections,
+  detectSceneChanges,
+  scoreHighlightWindows,
+  generateThumbnails,
+} from '../services/analyzer';
+import { getMediaInfo } from '../services/ffmpeg';
+import { ClipWindow } from '../services/videoProcessor';
 
 export type ProcessingScreenProps = NativeStackScreenProps<RootStackParamList, 'Processing'>;
 
@@ -13,18 +21,41 @@ const ProcessingScreen: React.FC<ProcessingScreenProps> = ({ route, navigation }
   useEffect(() => {
     const process = async () => {
       try {
-        setProgressText('Analyzing video...');
-        // TODO: run silence / scene analysis to build windows.
-        // For now produce a single 30s clip starting at 0.
-        const windows: ClipWindow[] = [{ start: 0, duration: 30 }];
+        // get video duration to clamp windows later
+        const info = await getMediaInfo(videoUri);
+        const durationSec = info?.duration ? parseFloat(info.duration) : undefined;
 
+        // Silence Detection
+        setProgressText('Detecting silence...');
+        const speechSections = await detectSpeechSections(videoUri);
+        if (durationSec) {
+          // clamp MAX_SAFE_INTEGER markers
+          speechSections.forEach((sec) => {
+            if (sec[1] === Number.MAX_SAFE_INTEGER) sec[1] = durationSec;
+          });
+        }
+
+        // Scene Changes
+        setProgressText('Detecting scene changes...');
+        const sceneTimes = await detectSceneChanges(videoUri);
+
+        // Score windows
+        setProgressText('Scoring highlights...');
+        const windows: ClipWindow[] = scoreHighlightWindows(speechSections, sceneTimes, 30, 5);
+
+        // Generate Clips
         setProgressText('Generating clips...');
         const clips = await generateHighlightClips(videoUri, windows);
 
-        setProgressText('Concatenating & formatting...');
-        const finalPath = await concatAndFormatVertical(clips);
+        // Generate thumbnails at start times
+        setProgressText('Generating thumbnails...');
+        const thumbTimes = windows.map((w) => w.start + 0.5);
+        const thumbs = await generateThumbnails(videoUri, thumbTimes);
 
-        navigation.replace('Preview', { clips: finalPath ? [finalPath] : clips });
+        // Optionally concatenate into one vertical video
+        // const finalPath = await concatAndFormatVertical(clips);
+
+        navigation.replace('Preview', { clips, thumbs });
       } catch (err) {
         console.error(err);
         setProgressText('Processing failed');
