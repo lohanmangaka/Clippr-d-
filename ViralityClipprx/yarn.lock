@@ -1897,6 +1897,13 @@
   dependencies:
     undici-types "~7.8.0"
 
+"@types/react-native-uuid@^2.0.0":
+  version "2.0.0"
+  resolved "https://registry.yarnpkg.com/@types/react-native-uuid/-/react-native-uuid-2.0.0.tgz#b0c4ec48973fd6618c104c15034a94edae00b1bf"
+  integrity sha512-EzREcBGsE6AeXWmXbWq0RFtzBh1RLjHWHU4uwirroQD9FVpFmKdqKW4r8mmTK40FGQiYAhhyWTnWV98ID3Ajow==
+  dependencies:
+    react-native-uuid "*"
+
 "@types/react-test-renderer@^19.1.0":
   version "19.1.0"
   resolved "https://registry.yarnpkg.com/@types/react-test-renderer/-/react-test-renderer-19.1.0.tgz#1d0af8f2e1b5931e245b8b5b234d1502b854dc10"
@@ -5587,7 +5594,7 @@ react-native-screens@^4.11.1:
     react-native-is-edge-to-edge "^1.1.7"
     warn-once "^0.1.0"
 
-react-native-uuid@^2.0.3:
+react-native-uuid@*, react-native-uuid@^2.0.3:
   version "2.0.3"
   resolved "https://registry.yarnpkg.com/react-native-uuid/-/react-native-uuid-2.0.3.tgz#f85f8a8d68e52e3f1c18ba0f02ec7776f9d4a0da"
   integrity sha512-f/YfIS2f5UB+gut7t/9BKGSCYbRA9/74A5R1MDp+FLYsuS+OSWoiM/D8Jko6OJB6Jcu3v6ONuddvZKHdIGpeiw==
