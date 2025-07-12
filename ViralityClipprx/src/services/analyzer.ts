@@ -5,6 +5,13 @@ import { generateId } from '../utils/id';
 import { registerTemp } from '../utils/tempManager';
 import { ensureDirectories, CACHE_DIR } from '../config/directories';
 
+// Configurable weights – tweakable via UI later
+export const WEIGHTS = {
+  speech: 1,
+  scene: 3,
+  balancePenalty: 0.1,
+};
+
 /** Helper to run FFmpeg command and return full console output */
 async function runAndGetOutput(cmd: string): Promise<string> {
   const { ok, logs } = await executeWithLogs(cmd);
@@ -12,9 +19,23 @@ async function runAndGetOutput(cmd: string): Promise<string> {
   return logs;
 }
 
+/** Measure average loudness using ffmpeg volumedetect, returns mean volume in dBFS (negative) */
+async function getMeanVolume(path: string): Promise<number | null> {
+  const cmd = `-i "${path}" -af volumedetect -f null -`;
+  try {
+    const logs = await runAndGetOutput(cmd);
+    const match = logs.match(/mean_volume:\s*(-?\d+\.?\d*) dB/);
+    if (match) return parseFloat(match[1]);
+  } catch (e) {
+    console.warn('volumedetect failed', e);
+  }
+  return null;
+}
+
 /** Silence detection to produce speech sections using silencedetect logs */
 export async function detectSpeechSections(path: string): Promise<Array<[number, number]>> {
-  const thresholds = [-35, -40, -45];
+  const adaptive = await getMeanVolume(path);
+  const thresholds = adaptive !== null ? [adaptive - 10, adaptive - 15, adaptive - 20] : [-35, -40, -45];
   const silenceDuration = 0.4;
 
   for (const noiseThreshold of thresholds) {
@@ -102,7 +123,7 @@ export async function generateThumbnails(path: string, times: number[]): Promise
   for (const t of times) {
     const outPath = `${CACHE_DIR}/thumb_${generateId()}.jpg`;
     registerTemp(outPath);
-    const cmd = `-y -ss ${t} -i "${path}" -vf scale=320:-1 -frames:v 1 -q:v 3 "${outPath}"`;
+    const cmd = `-y -ss ${t} -i "${path}" -vf scale=480:-1:flags=lanczos -frames:v 1 -q:v 2 "${outPath}"`;
     const logs = await runAndGetOutput(cmd);
     if (await RNFS.exists(outPath)) {
       outputPaths.push(outPath);
@@ -119,9 +140,7 @@ export function scoreHighlightWindows(
   windowSize = 30,
   topK = 5,
 ): ClipWindow[] {
-  const speechWeight = 1;
-  const sceneWeight = 3;
-  const balanceFactor = 0.1; // penalize gaps without scenes or speech
+  const { speech: speechWeight, scene: sceneWeight, balancePenalty: balanceFactor } = WEIGHTS;
   const candidates: { window: ClipWindow; score: number }[] = [];
 
   speechSections.forEach(([startSpeech, endSpeech]) => {
@@ -139,18 +158,20 @@ export function scoreHighlightWindows(
     }
   });
 
-  // Sort and pick topK without heavy overlap (>50% overlap)
+  // Sort high→low
   candidates.sort((a, b) => b.score - a.score);
+
+  // Non-max suppression (60 % overlap)
   const selected: ClipWindow[] = [];
+  const overlapThresh = 0.6;
 
   for (const c of candidates) {
     if (selected.length >= topK) break;
-    const overlaps = selected.some((w) =>
-      Math.min(w.start + w.duration, c.window.start + c.window.duration) - Math.max(w.start, c.window.start) > windowSize / 2,
-    );
-    if (!overlaps) {
-      selected.push(c.window);
-    }
+    const overlaps = selected.some((w) => {
+      const inter = Math.min(w.start + w.duration, c.window.start + c.window.duration) - Math.max(w.start, c.window.start);
+      return inter / windowSize > overlapThresh;
+    });
+    if (!overlaps) selected.push(c.window);
   }
 
   return selected;

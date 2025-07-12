@@ -83,7 +83,7 @@ const ProcessingScreen: React.FC<ProcessingScreenProps> = ({ route, navigation }
         console.error(err);
         Alert.alert('Error', 'Processing failed');
       } finally {
-        // await cleanupTemps(); // This line was not in the edit hint, so it's removed.
+        await cleanupTemps();
       }
     };
 
