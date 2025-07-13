@@ -4,18 +4,34 @@ workflows:
     max_build_duration: 60
     environment:
       vars:
-        NODE_ENV: production
+        PACKAGE_NAME: "com.clipprd"
+      node: 16.20.0
+      java: 11
       android_signing:
-        keystore_reference: clipprd_keystore
-      flutter: stable
-      xcode: latest
+        - clipprd_keystore
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: "*"
+          include: true
     scripts:
-      - name: Install dependencies
+      - name: Install Dependencies
         script: |
           npm install
-      - name: Build Android APK
+      - name: Install Android SDK Platform
+        script: |
+          yes | sdkmanager "platforms;android-33"
+      - name: Build Release APK
         script: |
           cd android
           ./gradlew assembleRelease
     artifacts:
       - android/app/build/outputs/**/*.apk
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: true
