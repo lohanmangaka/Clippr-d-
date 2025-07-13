@@ -8,7 +8,7 @@ workflows:
       node: 16.20.0
       java: 11
       android_signing:
-        - clipprd_keystore
+        keystore_reference: clipprd_keystore
     triggering:
       events:
         - push
