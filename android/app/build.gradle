@@ -30,6 +30,19 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            if (System.getenv("CI")) {
+                storeFile file(System.getenv("CM_KEYSTORE_PATH"))
+                storePassword System.getenv("CM_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("CM_KEY_ALIAS")
+                keyPassword System.getenv("CM_KEY_PASSWORD")
+            } else {
+                storeFile file('clipprd_keystore.jks')
+                storePassword 'yourLocalPassword'
+                keyAlias 'clipprd_key'
+                keyPassword 'yourLocalKeyPassword'
+            }
+        }
     }
 
     buildTypes {
@@ -39,7 +52,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
         }
     }
 
@@ -56,26 +69,15 @@ dependencies {
     implementation "com.facebook.react:react-native:0.72.6"
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'androidx.multidex:multidex:2.0.1'
-    
-    // Vector Icons
+
     implementation project(':react-native-vector-icons')
-    
-    // Video Processing
     implementation project(':react-native-ffmpeg')
-    
-    // File System
     implementation project(':react-native-fs')
-    
-    // Navigation
     implementation project(':react-native-screens')
     implementation project(':react-native-safe-area-context')
     implementation project(':react-native-gesture-handler')
     implementation project(':react-native-reanimated')
-    
-    // Video Player
     implementation project(':react-native-video')
-    
-    // Other utilities
     implementation project(':react-native-slider')
     implementation project(':react-native-progress')
     implementation project(':react-native-document-picker')
@@ -85,19 +87,20 @@ dependencies {
     implementation project(':react-native-linear-gradient')
     implementation project(':react-native-svg')
     implementation project(':react-native-modal')
-    
+
     debugImplementation("com.facebook.flipper:flipper:0.125.0") {
         exclude group:'com.facebook.fbjni'
     }
-    
+
     debugImplementation("com.facebook.flipper:flipper-network-plugin:0.125.0") {
         exclude group:'com.facebook.flipper'
         exclude group:'com.squareup.okhttp3', module:'okhttp'
     }
-    
+
     debugImplementation("com.facebook.flipper:flipper-fresco-plugin:0.125.0") {
         exclude group:'com.facebook.flipper'
     }
 }
 
-apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)
+apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle");
+applyNativeModulesAppBuildGradle(project)
