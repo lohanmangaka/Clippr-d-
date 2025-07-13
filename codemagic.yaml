@@ -5,6 +5,7 @@ workflows:
     environment:
       vars:
         PACKAGE_NAME: "com.clipprd"
+        ANDROID_SDK_ROOT: $HOME/Library/Android/sdk
       node: 16.20.0
       java: 11
       android_signing:
@@ -21,7 +22,9 @@ workflows:
           npm install
       - name: Install Android SDK Platform
         script: |
-          yes | sdkmanager "platforms;android-33"
+          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2"
       - name: Build Release APK
         script: |
           cd android
