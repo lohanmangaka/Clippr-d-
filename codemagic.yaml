@@ -7,8 +7,7 @@ workflows:
         PACKAGE_NAME: "com.clipprd"
       node: 16.20.0
       java: 11
-      android_signing:
-        keystore_reference: clipprd_keystore
+      android_signing: clipprd_keystore
     triggering:
       events:
         - push
