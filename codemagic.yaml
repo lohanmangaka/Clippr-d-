@@ -7,7 +7,7 @@ workflows:
         PACKAGE_NAME: "com.clipprd"
         ANDROID_SDK_ROOT: $HOME/Library/Android/sdk
       node: 16.20.0
-      java: 11
+      java: 17
       android_signing:
         - clipprd_keystore
     triggering:
