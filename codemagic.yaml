@@ -8,8 +8,12 @@ workflows:
         PACKAGE_NAME: "com.edenraen.clipprd"
       node: 16.20.0
       java: 11
-      android_signing:
-        - clipprd_keystore
+        android:
+  signing:
+    keystore: "clipprd_keystore"
+    keystore_password: $CM_KEYSTORE_PASSWORD
+    key_alias: "clipprd_key"
+    key_password: $CM_KEY_PASSWORD
     triggering:
       events:
         - push
